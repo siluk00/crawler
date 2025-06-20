@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -17,8 +20,22 @@ func main() {
 	}
 
 	website := os.Args[1]
+	websiteURL, err := url.Parse(website)
+	if err != nil {
+		log.Fatalf("provide a url")
+	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	cfg := config{
+		baseUrl:            websiteURL,
+		pages:              make(map[string]int),
+		mu:                 &mu,
+		concurrencyControl: make(chan struct{}),
+		wg:                 &wg,
+	}
 	fmt.Printf("starting crawl of %s\n", website)
-	go CrawlPage(website)
+	go cfg.crawlPage()
 	time.Sleep(5 * time.Second)
+	fmt.Printf("Ending after %d seconds\n", 5)
 	os.Exit(0)
 }

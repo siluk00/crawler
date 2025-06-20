@@ -2,64 +2,79 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-func crawlPage(domain, rawCurrentURL string, pages map[string]int) {
-	urlParse, _ := url.Parse(rawCurrentURL)
-	if urlParse.Host != domain {
+func (cfg *config) crawlPageRecursively(rawCurrentURL string, level int) {
+	fmt.Printf("trying to crawl %s\n", rawCurrentURL)
+	currentUrlParsed, err := url.Parse(rawCurrentURL)
+	//fmt.Printf("*trying to crawl %s\n", currentUrlParsed.String())
+	if err != nil {
 		return
 	}
+
+	domainBaseUrl, _ := extractMainDomain(cfg.baseUrl.Host)
+	domainCurrentUrl, _ := extractMainDomain(currentUrlParsed.Host)
+
+	if domainCurrentUrl != domainBaseUrl && domainBaseUrl != "" {
+		return
+	}
+
 	normalizedUrl, err := NormalizeURL(rawCurrentURL)
 	if err != nil {
-		log.Printf("Error normalizing %v", err)
+		fmt.Printf("Error normalizing %v", err)
 		return
 	}
 
-	pages[normalizedUrl]++
-	if pages[normalizedUrl] > 1 {
-		return
-	}
-	htmlFromPage, err := GetHTML(rawCurrentURL)
-	if err != nil {
-		log.Printf("Error getting html: %v", err)
-		return
-	}
-	fmt.Println(htmlFromPage)
-	urlsCrawled, err := GetURLsFromHTML(htmlFromPage, rawCurrentURL)
-	if err != nil {
-		log.Printf("Error crawling url: %v", err)
+	//cfg.mu.Lock()
+	//defer cfg.mu.Unlock()
+
+	cfg.pages[normalizedUrl]++
+	if cfg.pages[normalizedUrl] > 1 {
 		return
 	}
 
+	htmlFromPage, err := GetHTML(currentUrlParsed.Scheme + "://" + normalizedUrl)
+	if err != nil {
+		fmt.Printf("Error getting html: %v", err)
+		return
+	}
+	//fmt.Println(htmlFromPage)
+
+	urlsCrawled, err := cfg.GetURLsFromHTML(htmlFromPage, currentUrlParsed.Scheme+"://"+normalizedUrl)
+	if err != nil {
+		fmt.Printf("Error crawling url: %v", err)
+		return
+	}
+	//fmt.Println(urlsCrawled)
+
+	fmt.Printf("crawling %s in level %d\n", rawCurrentURL, level)
+	level++
 	for _, urlCrawled := range urlsCrawled {
-		crawlPage(domain, urlCrawled, pages)
+		fmt.Printf("--%s\n", urlCrawled)
+		cfg.crawlPageRecursively(urlCrawled, level)
 	}
 }
 
-func CrawlPage(baseUrl string) error {
-	urlParsed, err := url.Parse(baseUrl)
-	if err != nil {
-		return fmt.Errorf("error parsing url: %v", err)
-	}
-	pagesMap := make(map[string]int)
+func (cfg *config) crawlPage() error {
 
 	osSigChan := make(chan os.Signal, 1)
 	signal.Notify(osSigChan, syscall.SIGINT)
 	go func() {
 		<-osSigChan
 		fmt.Println()
-		printMap(pagesMap)
+		printMap(cfg.pages)
 		os.Exit(0)
 	}()
 
-	defer printMap(pagesMap)
+	defer printMap(cfg.pages)
 
-	crawlPage(urlParsed.Host, baseUrl, pagesMap)
+	//fmt.Printf("baseurl:%s\n", cfg.baseUrl.String())
+
+	cfg.crawlPageRecursively(cfg.baseUrl.String(), 0)
 	return nil
 }
 

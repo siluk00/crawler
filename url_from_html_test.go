@@ -2,11 +2,21 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"reflect"
 	"testing"
 )
 
 func TestGetURLsFromHTML(t *testing.T) {
+
+	cfg := config{
+
+		pages:              nil,
+		mu:                 nil,
+		concurrencyControl: nil,
+		wg:                 nil,
+	}
+
 	tests := []struct {
 		url      string
 		htmlBody string
@@ -110,7 +120,12 @@ func TestGetURLsFromHTML(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("test%d", i), func(t *testing.T) {
-			actual, err := GetURLsFromHTML(test.htmlBody, test.url)
+			var err error
+			cfg.baseUrl, err = url.Parse(test.url)
+			if err != nil {
+				t.Errorf("error parsing baseurl: %v", err)
+			}
+			actual, err := cfg.GetURLsFromHTML(test.htmlBody, test.url)
 			if err != nil {
 				t.Errorf("error getting urls: %v", err)
 			}

@@ -1,24 +1,39 @@
 package main
 
 import (
+	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/publicsuffix"
 )
 
-func GetURLsFromHTML(htmlBody, rawBaseURL string) ([]string, error) {
+func (cfg *config) GetURLsFromHTML(htmlBody, rawBaseURL string) ([]string, error) {
 	node, err := html.Parse(strings.NewReader(htmlBody))
 	if err != nil {
 		return nil, err
 	}
+
+	parsedURL, err := url.Parse(rawBaseURL)
+	if err != nil {
+		return nil, err
+	}
+
 	links := traverseNode(node, 0)
-	for i, link := range links {
-		if link[0] == '/' {
-			links[i] = rawBaseURL + link
+	linksToReturn := make([]string, 0, 1)
+
+	for _, link := range links {
+		//fmt.Println("**", link)
+		if len(link) > 1 && link[:2] == "//" {
+			linksToReturn = append(linksToReturn, parsedURL.Scheme+":"+link)
+		} else if link[0] == '/' {
+			linksToReturn = append(linksToReturn, cfg.baseUrl.String()+link)
+		} else if link[0] == '#' {
+			continue
 		}
 	}
 
-	return links, nil
+	return linksToReturn, nil
 }
 
 func traverseNode(node *html.Node, depth int) []string {
@@ -36,4 +51,13 @@ func traverseNode(node *html.Node, depth int) []string {
 	}
 
 	return links
+}
+
+func extractMainDomain(hostname string) (string, error) {
+	mainhost, err := publicsuffix.EffectiveTLDPlusOne(hostname)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(mainhost, ".")[0], nil
 }
