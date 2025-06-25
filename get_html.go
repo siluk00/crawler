@@ -20,7 +20,7 @@ func GetHTML(url string) (string, error) {
 	}
 
 	if response.StatusCode >= 400 {
-		return "", fmt.Errorf("response status is an error message")
+		return "", fmt.Errorf("response status is an error message: %d", response.StatusCode)
 	}
 
 	respBody, err := io.ReadAll(response.Body)
